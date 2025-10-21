@@ -1,86 +1,131 @@
-function bounding_box = p3(picture_full)
-    RESIZE_WIDTH = 800;
-    ERR_MARGIN = 10;
-    BLUE2PLATE_RATIO = 14;
-    CORRELATION_THRESHOLD = 0.5;
+clear; 
+clc; 
+close all;
 
-    blue_part_org = imread('blue_part.png');
+[file, path] = uigetfile({'*.jpg;*.png'}, 'Select your image');
+main_image = imread([path file]);
+main_image = imresize(main_image, [600 1000]);
+image = rgb2gray(main_image);
+image = mybinaryfun(image, 108);
+image = bwareaopen(image, 200);
 
-    picture = imresize(picture_full, [NaN, RESIZE_WIDTH]);
-    ratio = size(picture_full, 1) / size(picture, 1);
+figure
+subplot(1,2,1)
+imshow(main_image)
+subplot(1,2,2)
+imshow(image)
+hold on
 
-    [corr_mix, corr_max, bbox] = rgb_corr2(blue_part_org, picture);
+[labeled_img, num] = bwlabel(image);
+stats = regionprops(labeled_img, 'BoundingBox', 'Area');
 
-    for r=0.2:0.2:10
-        % resizing the picture by a scale
-        blue_part = imresize(blue_part_org, r);
-        if size(picture, 1) > size(blue_part, 1)
-            [new_corr_mix, new_corr_max, new_bbox] = rgb_corr2(blue_part, picture);
-            if new_corr_max > corr_max
-                if new_corr_max > CORRELATION_THRESHOLD
-                    corr_max = new_corr_max;
-                    corr_mix = new_corr_mix;
-                    bbox = new_bbox;
-                end
-            end
-        end
-    end
+y_coords = arrayfun(@(x) x.BoundingBox(2), stats);  
+[y_coords_sorted, sortIndex] = sort(y_coords);  
+sorted_stats = stats(sortIndex);
+cords = {};
 
-    blue_part_org2 = imread('blue_part2.png');
-
-    picture = imresize(picture_full, [NaN, RESIZE_WIDTH]);
-    ratio = size(picture_full, 1) / size(picture, 1);
-
-    for r=0.2:0.2:10
-        % resizing the picture by a scale
-        blue_part2 = imresize(blue_part_org2, r);
-        if size(picture, 1) > size(blue_part2, 1)
-            [new_corr_mix, new_corr_max, new_bbox] = rgb_corr2(blue_part2, picture);
-            if new_corr_max > corr_max
-                if new_corr_max > CORRELATION_THRESHOLD
-                    corr_max = new_corr_max;
-                    corr_mix = new_corr_mix;
-                    bbox = new_bbox;
-                end
-            end
-        end
-    end
-
-
-
-    if corr_max < CORRELATION_THRESHOLD
-        fprintf("%s", "DID NOT FOUND THE BLUE PART");
-    end
-    if corr_max >= CORRELATION_THRESHOLD
-        bbox_full = [round((bbox(1) - ERR_MARGIN) * ratio), ...
-                    round((bbox(2) - ERR_MARGIN) * ratio), ...
-                    round((bbox(3) + 2 * ERR_MARGIN) * ratio), ...
-                    round((bbox(4) + 2 * ERR_MARGIN) * ratio)];
-    
-        bounding_box = bbox_full;
-        bounding_box(3) = BLUE2PLATE_RATIO * bbox(3) * ratio;
-
-        bounding_box
-  
-        figure;
-        cols = 1;
-        rows = 3;
-        cnt = 1;
-        subplot(rows, cols, cnt);
-        cnt = cnt + 1;
-        imshow(picture);
-        title('Picture')
-
-        subplot(rows, cols, cnt);
-        cnt = cnt + 1;
-        imshow(picture_full);
-        rectangle('Position', bbox_full, 'edgecolor', 'r', 'linewidth', 2);
-        rectangle('Position', bounding_box, 'edgecolor', 'g', 'linewidth', 1);
-        title("Bounding boxes around the detected parts");
-
-
-        subplot(rows, cols, cnt);
-        imshow(imcrop(picture_full, bounding_box));
-        title("The cropped part");
+for k = 1:num
+    bbox = sorted_stats(k).BoundingBox;
+    if bbox(3) < bbox(4)*1.1
+        rectangle('Position', bbox, 'EdgeColor', 'r', 'LineWidth', 2);
+        cords{end+1} = bbox ;    
     end
 end
+hold off
+
+tresh = 10;
+
+for i = 1:length(cords)-2
+    if abs(cords{i}(2) -cords{i+1}(2)) < tresh && abs(cords{i}(2) -cords{i+2}(2)) < tresh && abs(cords{i+1}(2) -cords{i+2}(2)) < tresh
+        plate_cord = [cords{i}(1)-cords{i}(3), cords{i}(2)-2*tresh,12.5*cords{i}(3),cords{i}(4)+4*tresh];
+        break ;
+    end
+end
+
+plate = imcrop(main_image,plate_cord);
+figure 
+imshow(plate)
+
+image = plate;
+
+image = imresize(image, [300 500]);
+
+figure;
+subplot(2,2,1)
+imshow(image)
+title('Base')
+
+subplot(2,2,2)
+image = rgb2gray(image);
+imshow(image)
+title('Gray')
+
+subplot(2,2,3)
+image = imbinarize(image);
+image = ~image;
+imshow(image)
+title('Binary')
+
+subplot(2,2,4)
+image = bwareaopen(image,500) - bwareaopen(image,8000);
+imshow(image)
+title('Cleaned')
+
+[L,maxSegment] = bwlabel(image);
+maxSegment = maxSegment+1;
+hold on
+
+label_positions = zeros(2,maxSegment-1);
+for i = 1:maxSegment-1
+    [r,c] = find(L == i);
+    mc = min(c,[],'all');
+    mr = min(r,[],'all');
+    Mc = max(c,[],'all');
+    Mr = max(r,[],'all');
+    label_positions(1,i) = i;
+    label_positions(2,i) = mc;
+    rectangle('Position',[mc,mr,Mc-mc,Mr-mr],'EdgeColor','b','LineWidth',2)
+end
+
+[temp,indexs] = sort(label_positions(2,:));
+label_positions(1,:) = label_positions(1,indexs);
+label_positions(2,:) = label_positions(2,indexs);
+
+files=dir('data/Persian_Map_Set');
+len=length(files)-2;
+TRAIN=cell(2,len);
+for i=1:len
+   TRAIN{1,i}=imread(['data/Persian_Map_Set','/',files(i+2).name]);
+   TRAIN{2,i}=files(i+2).name(1);
+end
+
+figure
+result = [];
+file = fopen('p3_result.txt', 'wt');
+
+for i = 1:maxSegment-1
+    [r,c] = find(L == label_positions(1,i));
+    character = image(min(r):max(r), min(c):max(c));
+    subplot(1,maxSegment-1,i)
+    imshow(character)
+    decision = cell(2,1);
+    decision{1,1} = 0;
+    decision{2,1} = '';
+
+    for j = 1:length(TRAIN)
+        temp = corr2(imresize(TRAIN{1,j},size(character)), character);
+        if temp >= 0.5 && temp >= decision{1,1}
+            decision{1,1} = temp;
+            decision{2,1} = TRAIN{2,j};
+        end
+    end
+
+    disp(decision{2,1});
+    fprintf(file,'%c\n',decision{2,1});
+    result = [result decision{2,1}];
+end
+
+
+fclose(file);
+
+

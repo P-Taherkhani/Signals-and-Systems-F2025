@@ -1,83 +1,85 @@
-function final_output=p2(picture)
-    figure;
+clear;
+clc;
+close all;
 
-    subplot(4, 2, 1);
-    imshow(picture);
-    title("raw picture");
-    %%%
-    picture=imresize(picture,[300 500]);
-    subplot(4, 2, 2);
-    imshow(picture);
-    title("resized picture");
-    %%%
-    gray_picture = rgb2gray(picture);
-    subplot(4, 2, 3);
-    imshow(gray_picture);
-    title("grayscale picture");
-    %%%
-    threshold = graythresh(gray_picture);
-    picture = imbinarize(gray_picture,threshold);
-    subplot(4, 2, 4);
-    imshow(picture);
-    title("black and white picture");
+[file,path] = uigetfile({'*.jpg;*.png'},'Select your image');
+image = imread([path file]);
+image = imresize(image, [300 500]);
 
-    %%%
-    pic = bwareaopen(~picture,1000);
-    subplot(4, 2, 5);
-    imshow(pic);
-    title("after removing small components");
-    background=bwareaopen(~picture,10000);
+figure;
+subplot(2,2,1)
+imshow(image)
+title('Base')
 
-    subplot(4, 2, 6);
-    imshow(background);
-    title("background of the picture");
+subplot(2,2,2)
+image = rgb2gray(image);
+imshow(image)
+title('Gray')
 
-    picture2=pic-background;
-    subplot(4, 2, 7);
-    imshow(picture2);
-    title("only letters and numbers");
+subplot(2,2,3)
+image = imbinarize(image);
+image = ~image;
+imshow(image)
+title('Binary')
 
-    %%%
-    [labeled_image, num_components] = bwlabel(picture2);
-    %%%
-    load TRAININGSET_FARSI;
-    
-    totalLetters=size(TRAIN_FARSI,2);
-    
-    component_stats = regionprops(labeled_image, 'BoundingBox');
-    bboxes = cat(1, component_stats.BoundingBox);
-    [~, sort_idx] = sort(bboxes(:, 1));
+subplot(2,2,4)
+image = bwareaopen(image,400) - bwareaopen(image,5000);
+imshow(image)
+title('Cleaned')
 
-    subplot(4, 2, 8);
-    imshow(picture2);
-    for n=1:num_components
-        rectangle('Position',component_stats(n).BoundingBox,'EdgeColor','m','LineWidth',1)
-    end
-    title("rectangles around components");
-    
-    final_output=[];
-    t=[];
-    
-    for i=1:num_components
-        
-        n = sort_idx(i);
-        [r, c] = find(labeled_image == n);
-        Y=labeled_image(min(r):max(r),min(c):max(c));
+[L,maxSegment] = bwlabel(image);
+maxSegment = maxSegment+1;
+hold on
 
-        ro=zeros(1,totalLetters);
-        for k=1:totalLetters
-            [row, col] = size(TRAIN_FARSI{1,k});
-            Y2 = imresize(Y, [row, col]);
-            ro(k)=corr2(TRAIN_FARSI{1,k},Y2);
+label_positions = zeros(2,maxSegment-1);
+for i = 1:maxSegment-1
+    [r,c] = find(L == i);
+    mc = min(c,[],'all');
+    mr = min(r,[],'all');
+    Mc = max(c,[],'all');
+    Mr = max(r,[],'all');
+    label_positions(1,i) = i;
+    label_positions(2,i) = mc;
+    rectangle('Position',[mc,mr,Mc-mc,Mr-mr],'EdgeColor','b','LineWidth',2)
+end
 
-        end
-        [MAXRO,pos]=max(ro);
-        if MAXRO>.45
-            out=TRAIN_FARSI{2,pos};       
-            final_output=[final_output out];
+[temp,indexs] = sort(label_positions(2,:));
+label_positions(1,:) = label_positions(1,indexs);
+label_positions(2,:) = label_positions(2,indexs);
+
+files=dir('data/Persian_Map_Set');
+len=length(files)-2;
+TRAIN=cell(2,len);
+for i=1:len
+   TRAIN{1,i}=imread(['data/Persian_Map_Set','/',files(i+2).name]);
+   TRAIN{2,i}=files(i+2).name(1);
+end
+
+figure
+result = [];
+file = fopen('persian_plate_result.txt', 'wt');
+
+for i = 1:maxSegment-1
+    [r,c] = find(L == label_positions(1,i));
+    character = image(min(r):max(r), min(c):max(c));
+    subplot(1,maxSegment-1,i)
+    imshow(character)
+    decision = cell(2,1);
+    decision{1,1} = 0;
+    decision{2,1} = '';
+
+    for j = 1:length(TRAIN)
+        temp = corr2(imresize(TRAIN{1,j},size(character)), character);
+        if temp >= 0.45 && temp >= decision{1,1}
+            decision{1,1} = temp;
+            decision{2,1} = TRAIN{2,j};
         end
     end
-    %8
-    fileID = fopen('Farsi Plate.txt', 'w', 'n', 'UTF-8'); 
-    fprintf(fileID, '%s\n', final_output); 
-    fclose(fileID);
+
+    disp(decision{2,1});
+    fprintf(file,'%c\n',decision{2,1});
+    result = [result decision{2,1}];
+end
+
+
+fclose(file);
