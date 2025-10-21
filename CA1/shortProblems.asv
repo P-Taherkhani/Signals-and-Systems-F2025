@@ -1,0 +1,41 @@
+% Scalar Variables
+a = 10;
+b = 2.5 * 10^23;
+c = 2 + 3j;
+d = exp(j * 2 * pi / 3);
+
+% Vector Variables
+aVec = [3.14, 15, 9, 26];
+bVec = [2.71; 8; 28; 182];
+%disp(aVec);
+%disp(bVec);
+
+cVec = 5 : -0.2 : -5;
+%disp(cVec);
+
+dVec = logspace(0, 1, 101);
+%disp(dVec);
+
+eVec = 'Hello';
+%disp(eVec);
+%length(eVec);
+%strlength(eVec);
+
+% Matrix Variables 
+
+aMat = 2 * ones(9);
+%disp(aMat)
+
+main_diag = [1, 2, 3, 4, 5, 4, 3, 2, 1];
+bMat = diag(main_diag);
+%disp(bMat)
+
+vTemp = 1 : 1 : 100;
+cMat = reshape(vTemp, [10, 10]);
+
+dMat = NaN(3,4);
+
+eMat = [13 -1 5; -22 10 -87];
+
+fMat_1 = floor(-3 + (7).*rand(5,3));
+fMat_2 = randi([-3, 3], 5, 3)
